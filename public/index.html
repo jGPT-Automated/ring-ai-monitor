@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ring AI Monitor</title>
+<style>
+  :root {
+    --bg:     #080808;
+    --bg2:    #111;
+    --bg3:    #161616;
+    --border: #1f1f1f;
+    --border2:#2a2a2a;
+    --text:   #ededed;
+    --muted:  #666;
+    --accent: #10b981;
+    --amber:  #f59e0b;
+    --red:    #ef4444;
+    --blue:   #3b82f6;
+    --purple: #a855f7;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+
+  /* ── Layout ── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(8,8,8,0.9); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .last-update { font-size: 11px; color: var(--muted); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  /* ── Stat cards ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -1px; }
+  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Two-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .panel-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title { font-size: 13px; font-weight: 700; }
+  .panel-meta { font-size: 11px; color: var(--muted); }
+
+  /* ── Event feed ── */
+  #event-list { max-height: 520px; overflow-y: auto; }
+  .event-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .event-item:last-child { border-bottom: none; }
+  .event-item:hover { background: var(--bg3); }
+  .event-item.new { animation: flashin 0.6s ease; }
+  @keyframes flashin { from { background: rgba(16,185,129,0.08); } to { background: transparent; } }
+  .event-emoji { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+  .event-body { flex: 1; min-width: 0; }
+  .event-category { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+  .event-details { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-time { font-size: 11px; color: var(--muted); flex-shrink: 0; margin-top: 2px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px; margin-left: 6px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-usps    { background: #1e3a5f; color: #60a5fa; }
+  .badge-fedex   { background: #3b1e5f; color: #c084fc; }
+  .badge-ups     { background: #3d2b00; color: #fbbf24; }
+  .badge-amazon  { background: #1e2d1e; color: #6ee7b7; }
+  .badge-dhl     { background: #3d1a00; color: #fb923c; }
+
+  /* ── Breakdown bars ── */
+  .breakdown { padding: 16px 20px; }
+  .bar-row { margin-bottom: 12px; }
+  .bar-label-row {
+    display: flex; justify-content: space-between;
+    font-size: 12px; margin-bottom: 5px;
+  }
+  .bar-name { color: var(--text); text-transform: capitalize; }
+  .bar-count { color: var(--muted); }
+  .bar-track {
+    height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.5s ease; }
+
+  /* ── Hourly chart ── */
+  #hourly-chart {
+    display: flex; align-items: flex-end;
+    gap: 3px; padding: 16px 20px; height: 100px;
+  }
+  .hour-bar {
+    flex: 1; background: var(--bg3); border-radius: 2px 2px 0 0;
+    cursor: default; transition: background 0.2s; position: relative;
+  }
+  .hour-bar:hover { background: var(--accent); }
+  .hour-bar-inner { background: var(--accent); border-radius: 2px 2px 0 0; opacity: 0.7; }
+
+  /* ── Mailman card ── */
+  .mailman-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 24px;
+  }
+  .mailman-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px; margin-top: 14px;
+  }
+  .mailman-stat { display: flex; flex-direction: column; gap: 4px; }
+  .mailman-val { font-size: 18px; font-weight: 700; color: var(--amber); }
+  .mailman-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Empty state ── */
+  .empty {
+    padding: 48px 20px; text-align: center; color: var(--muted); font-size: 13px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Ring <span>AI</span> Monitor</div>
+  <div class="header-right">
+    <div class="last-update" id="last-update">—</div>
+    <div class="live-dot"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stats row -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Events (7d)</div>
+      <div class="stat-value" id="total-events">—</div>
+      <div class="stat-sub">all categories</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Deliveries (7d)</div>
+      <div class="stat-value" id="total-deliveries">—</div>
+      <div class="stat-sub">all carriers</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mailman visits (30d)</div>
+      <div class="stat-value" id="mailman-visits">—</div>
+      <div class="stat-sub" id="mailman-avg">avg arrival —</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Top carrier</div>
+      <div class="stat-value" id="top-carrier" style="font-size:18px">—</div>
+      <div class="stat-sub" id="top-carrier-count">—</div>
+    </div>
+  </div>
+
+  <!-- Mailman pattern -->
+  <div class="mailman-card" id="mailman-panel" style="display:none">
+    <div class="panel-title">📬 Mailman Pattern (30 days)</div>
+    <div class="mailman-grid">
+      <div class="mailman-stat"><div class="mailman-val" id="mm-avg">—</div><div class="mailman-lbl">Avg arrival</div></div>
+      <div class="mailman-stat"><div class="mailman-val" id="mm-early">—</div><div class="mailman-lbl">Earliest</div></div>
+      <div class="mailman-stat"><div class="mailman-val" id="mm-late">—</div><div class="mailman-lbl">Latest</div></div>
+      <div class="mailman-stat"><div class="mailman-val" id="mm-spread">—</div><div class="mailman-lbl">Window (min)</div></div>
+    </div>
+  </div>
+
+  <!-- Two-col -->
+  <div class="two-col">
+
+    <!-- Event feed -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Live Events</div>
+        <div class="panel-meta" id="event-count">0 events</div>
+      </div>
+      <div id="event-list"><div class="empty">No events yet — watching...</div></div>
+    </div>
+
+    <!-- Right col -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Category breakdown -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Category Breakdown (7d)</div>
+        </div>
+        <div class="breakdown" id="breakdown-bars">
+          <div class="empty" style="padding:24px 0;">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Hourly heatmap -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Activity by Hour (7d)</div>
+        </div>
+        <div id="hourly-chart"></div>
+        <div style="display:flex;justify-content:space-between;padding:0 20px 12px;font-size:10px;color:var(--muted)">
+          <span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const EMOJI = {
+    mailman:'📬', delivery_driver:'📦', garbageman:'🗑️',
+    neighbor:'👋', pedestrian:'🚶', vehicle_only:'🚗',
+    animal:'🐾', empty:'👻', unknown:'❓'
+  }
+  const CARRIER_BADGE = {
+    USPS:'badge-usps', FedEx:'badge-fedex', UPS:'badge-ups',
+    Amazon:'badge-amazon', DHL:'badge-dhl'
+  }
+
+  let lastEventId = null
+
+  function timeAgo(ts) {
+    const s = Math.floor((Date.now() - new Date(ts)) / 1000)
+    if (s < 60)  return `${s}s ago`
+    if (s < 3600) return `${Math.floor(s/60)}m ago`
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`
+    return new Date(ts).toLocaleDateString()
+  }
+
+  function renderEvent(e, isNew = false) {
+    const badge = e.carrier
+      ? `<span class="badge ${CARRIER_BADGE[e.carrier] || ''}">${e.carrier}</span>`
+      : ''
+    return `
+      <div class="event-item${isNew ? ' new' : ''}" data-id="${e.id}">
+        <div class="event-emoji">${EMOJI[e.category] || '❓'}</div>
+        <div class="event-body">
+          <div class="event-category">${e.category.replace('_',' ')}${badge}</div>
+          <div class="event-details">${e.details || '—'} · ${e.camera_name || 'cam'}</div>
+        </div>
+        <div class="event-time">${timeAgo(e.detected_at)}</div>
+      </div>`
+  }
+
+  async function loadEvents() {
+    try {
+      const events = await fetch('/api/events?limit=60').then(r => r.json())
+      const list   = document.getElementById('event-list')
+
+      if (!events.length) {
+        list.innerHTML = '<div class="empty">No events yet — watching...</div>'
+        return
+      }
+
+      const newIds  = new Set(events.map(e => e.id))
+      const newest  = events[0]?.id
+
+      if (newest && newest !== lastEventId) {
+        const isFirst = lastEventId === null
+        lastEventId   = newest
+        list.innerHTML = events.map((e, i) => renderEvent(e, !isFirst && i === 0)).join('')
+      }
+
+      document.getElementById('event-count').textContent = `${events.length} events`
+    } catch (e) {
+      console.error('Events fetch failed', e)
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const stats = await fetch('/api/stats').then(r => r.json())
+      document.getElementById('total-events').textContent = stats.total
+
+      // Deliveries
+      const deliveries = (stats.counts['delivery_driver'] || 0) + (stats.counts['mailman'] || 0)
+      document.getElementById('total-deliveries').textContent = deliveries
+
+      // Top carrier
+      const carriers = stats.carriers || {}
+      const topC = Object.entries(carriers).sort((a,b) => b[1]-a[1])[0]
+      if (topC) {
+        document.getElementById('top-carrier').textContent = topC[0]
+        document.getElementById('top-carrier-count').textContent = `${topC[1]} deliveries`
+      }
+
+      // Category bars
+      const counts = stats.counts || {}
+      const max    = Math.max(...Object.values(counts), 1)
+      const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1])
+      document.getElementById('breakdown-bars').innerHTML = sorted.map(([cat, n]) => `
+        <div class="bar-row">
+          <div class="bar-label-row">
+            <span class="bar-name">${EMOJI[cat] || '❓'} ${cat.replace('_',' ')}</span>
+            <span class="bar-count">${n}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${Math.round(n/max*100)}%"></div>
+          </div>
+        </div>`).join('') || '<div class="empty" style="padding:16px 0">No data yet</div>'
+
+      // Hourly chart
+      const hourly = stats.hourly || Array(24).fill(0)
+      const maxH   = Math.max(...hourly, 1)
+      document.getElementById('hourly-chart').innerHTML = hourly.map((n, h) => {
+        const pct = Math.round(n / maxH * 100)
+        const label = `${h > 12 ? h-12 : h||12}${h >= 12 ? 'p':'a'}`
+        return `<div class="hour-bar" title="${label}: ${n} events">
+          <div class="hour-bar-inner" style="height:${pct}%;margin-top:${100-pct}%"></div>
+        </div>`
+      }).join('')
+
+    } catch (e) {
+      console.error('Stats fetch failed', e)
+    }
+  }
+
+  async function loadMailman() {
+    try {
+      const data = await fetch('/api/mailman').then(r => r.json())
+      if (!data.visits) return
+
+      document.getElementById('mailman-panel').style.display = 'block'
+      document.getElementById('mailman-visits').textContent  = data.visits
+      document.getElementById('mailman-avg').textContent     = `avg ${data.avg_time}`
+      document.getElementById('mm-avg').textContent          = data.avg_time
+      document.getElementById('mm-early').textContent        = data.earliest
+      document.getElementById('mm-late').textContent         = data.latest
+      document.getElementById('mm-spread').textContent       = data.spread_min
+    } catch (e) {}
+  }
+
+  function updateTimestamp() {
+    document.getElementById('last-update').textContent =
+      'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  }
+
+  async function refresh() {
+    await Promise.all([loadEvents(), loadStats(), loadMailman()])
+    updateTimestamp()
+  }
+
+  // Initial load + poll every 15s
+  refresh()
+  setInterval(refresh, 15000)
+</script>
+</body>
+</html>
